@@ -2,9 +2,7 @@
 //! that chains S-001 → S-004 and returns the sorted Session list the IPC
 //! command exposes.
 
-use claude_code_monitor_lib::session::{
-    list, list_processes, waiting_count, SessionStatus,
-};
+use claude_code_monitor_lib::session::{list, list_processes, waiting_count, SessionStatus};
 
 #[test]
 fn list_does_not_panic_and_matches_process_count_or_skips() {

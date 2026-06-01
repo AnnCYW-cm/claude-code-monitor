@@ -16,8 +16,12 @@ fn end_to_end_live_claude_session_tails_to_valid_json_or_skips() {
 
     let mut any_ok = false;
     for raw in &procs {
-        let Ok(path) = locate_jsonl(raw) else { continue };
-        let Ok(Some(line)) = tail_jsonl(&path) else { continue };
+        let Ok(path) = locate_jsonl(raw) else {
+            continue;
+        };
+        let Ok(Some(line)) = tail_jsonl(&path) else {
+            continue;
+        };
 
         // The last meaningful line in a claude JSONL must be valid JSON
         // (per docs/spec/jsonl-schema.md). If it isn't, our locator picked
@@ -67,10 +71,14 @@ fn end_to_end_classify_returns_valid_status_for_live_session_or_skips() {
     // must be one of the three variants — never panic.
     let mut any_classified = false;
     for raw in &procs {
-        let Ok(path) = locate_jsonl(raw) else { continue };
-        let Ok(Some(line)) = tail_jsonl(&path) else { continue };
+        let Ok(path) = locate_jsonl(raw) else {
+            continue;
+        };
+        let Ok(Some(line)) = tail_jsonl(&path) else {
+            continue;
+        };
 
-        let status = classify(last_meaningful(&[line.clone()]));
+        let status = classify(last_meaningful(std::slice::from_ref(&line)));
         // Every variant is valid; this test asserts classify is total.
         let _: SessionStatus = status;
         eprintln!(

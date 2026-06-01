@@ -2,7 +2,13 @@
 
 > A macOS menubar app that tells you which of your running Claude Code sessions is waiting for input.
 
-**Status:** alpha — MVP in progress. Not yet usable end-to-end.
+[![CI](https://github.com/AnnCYW-cm/claude-code-monitor/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/AnnCYW-cm/claude-code-monitor/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
+[![Rust](https://img.shields.io/badge/rust-1.77%2B-orange.svg)](https://www.rust-lang.org)
+[![Platform](https://img.shields.io/badge/platform-macOS-lightgrey.svg)](#)
+
+**Status:** alpha — backend pipeline (Epic 1, S-001..S-005) complete and tested
+(84 tests pass). Menubar UI in progress; no signed release `.app` yet.
 
 ## Why
 
@@ -14,12 +20,17 @@ If you run multiple Claude Code sessions in parallel (3–8 terminal tabs is com
 
 This is a passive indicator that lives in your menubar. No notifications, no sound — just a number you can glance at and a list you can pop open.
 
-## How it works (planned)
+## How it works
 
-- Enumerates running `claude` CLI processes via `sysinfo`.
-- For each process, locates its current JSONL transcript in `~/.claude/projects/<encoded-cwd>/`.
-- Reads the last message; if `role == "assistant"` and there is no pending `tool_use`, the session is **waiting**. Otherwise it is **working**.
-- Tray icon shows the count of waiting sessions. Click to see the list.
+- Enumerates running `claude` CLI processes via `sysinfo` (filters by name and current UID).
+- For each process, locates its active JSONL transcript at `~/.claude/projects/<encoded-cwd>/<session>.jsonl`. Path encoding rule: `/` → `-`, including the leading slash.
+- Tails the file from the end (seek-from-end + chunk doubling — 10MB tail in ~1ms), reverse-scans past attachment / ai-title / metadata envelopes, and reads `message.stop_reason` on the last user/assistant entry:
+  - `stop_reason == "end_turn"` → **Waiting** (you should look at this one)
+  - any other value, or a `user` envelope → **Working**
+  - unreadable / parse failure → **Unknown** (degraded gracefully, never crashes the list)
+- The tray icon title shows the count of Waiting sessions. Click to see the full list (UI in progress).
+
+JSONL schema verified against Claude Code 2.1.126 — see [`docs/spec/jsonl-schema.md`](./docs/spec/jsonl-schema.md). If the format changes, the spec and classifier are the only things to touch.
 
 ## Stack
 
@@ -51,12 +62,14 @@ Output lands in `src-tauri/target/release/bundle/`.
 ### MVP (v0.1)
 
 - [x] Project scaffold
-- [ ] Enumerate running `claude` processes
-- [ ] Locate active JSONL per process
-- [ ] Parse last message → waiting / working
-- [ ] Tray icon shows waiting count
-- [ ] Popup list with cwd / status / last message preview
-- [ ] Click row to expand full last message
+- [x] Enumerate running `claude` processes ([S-001](./docs/bmad/03-solutioning/epics/story-001-process-enumeration.md))
+- [x] Locate active JSONL per process ([S-002](./docs/bmad/03-solutioning/epics/story-002-jsonl-locator.md))
+- [x] Multi-MB JSONL tail reader ([S-003](./docs/bmad/03-solutioning/epics/story-003-jsonl-tail-reader.md))
+- [x] Parse last message → waiting / working / unknown ([S-004](./docs/bmad/03-solutioning/epics/story-004-status-classifier.md))
+- [x] `list_sessions` IPC + tray title sync ([S-005](./docs/bmad/03-solutioning/epics/story-005-list-sessions-command.md))
+- [ ] Popup list with cwd / status / last message preview (Epic 2)
+- [ ] Click row to expand full last message (Epic 2)
+- [ ] Notarized `.app` for download (v0.1 release blocker)
 
 ### Explicitly out of scope for MVP
 

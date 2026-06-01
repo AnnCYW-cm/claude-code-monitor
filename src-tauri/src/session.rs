@@ -203,10 +203,7 @@ pub fn locate_jsonl(proc: &RawProcess) -> Result<PathBuf, LocateError> {
 /// Pure (well, IO-only-on-`dir`) helper for `locate_jsonl`. Split out so unit
 /// tests can call it with a tempfile path + a fixed `now` for stale-window
 /// determinism.
-pub(crate) fn locate_jsonl_in_dir(
-    dir: &Path,
-    now: SystemTime,
-) -> Result<PathBuf, LocateError> {
+pub(crate) fn locate_jsonl_in_dir(dir: &Path, now: SystemTime) -> Result<PathBuf, LocateError> {
     if !dir.exists() {
         return Err(LocateError::DirNotFound);
     }
@@ -232,9 +229,7 @@ pub(crate) fn locate_jsonl_in_dir(
 
         match &newest {
             None => newest = Some((path, mtime)),
-            Some((_, current_mtime)) if mtime > *current_mtime => {
-                newest = Some((path, mtime))
-            }
+            Some((_, current_mtime)) if mtime > *current_mtime => newest = Some((path, mtime)),
             _ => {}
         }
     }
@@ -381,15 +376,22 @@ pub fn tail_lines(path: &Path, max_lines: usize) -> Result<Vec<String>, io::Erro
             .filter_map(|(i, b)| if *b == b'\n' { Some(i) } else { None })
             .collect();
 
-        let have_enough = newlines.len() >= max_lines + 1 || offset == 0;
+        let have_enough = newlines.len() > max_lines || offset == 0;
         if have_enough {
-            return Ok(extract_last_n_nonempty_lines(&buf, &newlines, max_lines, offset == 0));
+            return Ok(extract_last_n_nonempty_lines(
+                &buf,
+                &newlines,
+                max_lines,
+                offset == 0,
+            ));
         }
 
         let next = (chunk_size.saturating_mul(2)).min(size);
         if next == chunk_size {
             // Already at full file — same as offset == 0.
-            return Ok(extract_last_n_nonempty_lines(&buf, &newlines, max_lines, true));
+            return Ok(extract_last_n_nonempty_lines(
+                &buf, &newlines, max_lines, true,
+            ));
         }
         chunk_size = next;
     }
@@ -471,7 +473,8 @@ pub(crate) fn parse_iso8601_utc(s: &str) -> Option<u64> {
         || !(1..=31).contains(&day)
         || hour > 23
         || minute > 59
-        || second > 60 // tolerate leap second
+        || second > 60
+    // tolerate leap second
     {
         return None;
     }
@@ -481,7 +484,8 @@ pub(crate) fn parse_iso8601_utc(s: &str) -> Option<u64> {
         return None; // dates before 1970 don't fit u64 epoch.
     }
 
-    let total = (days as u64).checked_mul(86_400)?
+    let total = (days as u64)
+        .checked_mul(86_400)?
         .checked_add(hour as u64 * 3_600)?
         .checked_add(minute as u64 * 60)?
         .checked_add(second as u64)?;
@@ -608,10 +612,10 @@ pub fn last_meaningful(lines: &[String]) -> Option<JsonlEnvelope> {
 
 /// Decide a session's status from its last meaningful envelope.
 ///
-/// Pure function — no IO, no allocations beyond what serde already did. See
-/// [data-model.md § 1.2](../../../../docs/bmad/03-solutioning/data-model.md)
-/// + [UML 09 state](../../../../docs/design/uml/09-state-session.md) for the
-/// truth table.
+/// Pure function — no IO, no allocations beyond what serde already did.
+/// See [data-model.md § 1.2](../../../../docs/bmad/03-solutioning/data-model.md)
+/// and [UML 09 state](../../../../docs/design/uml/09-state-session.md) for
+/// the truth table.
 ///
 /// | Input | Output |
 /// |---|---|
@@ -1044,11 +1048,7 @@ mod tests {
     #[test]
     fn tail_handles_utf8_content() {
         let dir = TempDir::new().unwrap();
-        let p = write_file(
-            dir.path(),
-            "utf8.jsonl",
-            "前一行\n你好世界 🌍\n".as_bytes(),
-        );
+        let p = write_file(dir.path(), "utf8.jsonl", "前一行\n你好世界 🌍\n".as_bytes());
         assert_eq!(tail_jsonl(&p).unwrap().as_deref(), Some("你好世界 🌍"));
     }
 
@@ -1072,7 +1072,11 @@ mod tests {
                 .unwrap_or_default();
             format!(
                 r#","message":{{"role":"{}","content":"hi"{}}}"#,
-                if kind == "assistant" { "assistant" } else { "user" },
+                if kind == "assistant" {
+                    "assistant"
+                } else {
+                    "user"
+                },
                 stop
             )
         } else {
@@ -1118,8 +1122,7 @@ mod tests {
 
     #[test]
     fn classify_returns_working_when_assistant_no_stop_reason() {
-        let env: JsonlEnvelope =
-            serde_json::from_str(&envelope("assistant", None)).unwrap();
+        let env: JsonlEnvelope = serde_json::from_str(&envelope("assistant", None)).unwrap();
         assert_eq!(classify(Some(env)), SessionStatus::Working);
     }
 
@@ -1276,10 +1279,7 @@ mod tests {
     #[test]
     fn parse_iso8601_day_one() {
         // Second-day anchor: 1970-01-02T00:00:00Z = exactly 86400 seconds.
-        assert_eq!(
-            parse_iso8601_utc("1970-01-02T00:00:00Z"),
-            Some(86_400)
-        );
+        assert_eq!(parse_iso8601_utc("1970-01-02T00:00:00Z"), Some(86_400));
     }
 
     #[test]
@@ -1384,8 +1384,7 @@ mod tests {
 
     #[test]
     fn extract_preview_from_user_text_content() {
-        let env: JsonlEnvelope =
-            serde_json::from_str(&envelope("user", None)).unwrap();
+        let env: JsonlEnvelope = serde_json::from_str(&envelope("user", None)).unwrap();
         assert_eq!(extract_message_preview(&env).as_deref(), Some("hi"));
     }
 
@@ -1399,7 +1398,10 @@ mod tests {
             ]}
         }"#;
         let env: JsonlEnvelope = serde_json::from_str(line).unwrap();
-        assert_eq!(extract_message_preview(&env).as_deref(), Some("final answer"));
+        assert_eq!(
+            extract_message_preview(&env).as_deref(),
+            Some("final answer")
+        );
     }
 
     #[test]
@@ -1435,10 +1437,7 @@ mod tests {
             fake_session(2, SessionStatus::Waiting, Some(100)),
         ];
         sort_sessions(&mut v);
-        assert_eq!(
-            v.iter().map(|s| s.pid).collect::<Vec<_>>(),
-            vec![2, 1, 3]
-        );
+        assert_eq!(v.iter().map(|s| s.pid).collect::<Vec<_>>(), vec![2, 1, 3]);
     }
 
     #[test]
@@ -1449,10 +1448,7 @@ mod tests {
             fake_session(3, SessionStatus::Waiting, Some(150)),
         ];
         sort_sessions(&mut v);
-        assert_eq!(
-            v.iter().map(|s| s.pid).collect::<Vec<_>>(),
-            vec![2, 3, 1]
-        );
+        assert_eq!(v.iter().map(|s| s.pid).collect::<Vec<_>>(), vec![2, 3, 1]);
     }
 
     #[test]
@@ -1462,10 +1458,7 @@ mod tests {
             fake_session(2, SessionStatus::Waiting, Some(100)),
         ];
         sort_sessions(&mut v);
-        assert_eq!(
-            v.iter().map(|s| s.pid).collect::<Vec<_>>(),
-            vec![2, 1]
-        );
+        assert_eq!(v.iter().map(|s| s.pid).collect::<Vec<_>>(), vec![2, 1]);
     }
 
     #[test]

@@ -1,0 +1,56 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# Cancel in-flight runs for the same branch when a new commit lands —
+# saves runner minutes on rapid push sequences.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  rust:
+    name: Rust ${{ matrix.toolchain }} (macOS)
+    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # `stable` catches new clippy lints that ship with each release;
+        # `1.77` matches the rust-version floor declared in Cargo.toml,
+        # ensuring we don't accidentally rely on newer compiler features.
+        toolchain: [stable, "1.77"]
+
+    defaults:
+      run:
+        working-directory: src-tauri
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ matrix.toolchain }}
+          components: rustfmt, clippy
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: cargo fmt --check
+        # Only enforce formatting on `stable` — older toolchains may format
+        # slightly differently and we don't want the floor build to fail on
+        # cosmetic drift.
+        if: matrix.toolchain == 'stable'
+        run: cargo fmt --check
+
+      - name: cargo clippy --all-targets -- -D warnings
+        # Same reason: clippy lint set evolves, gate on `stable` only.
+        if: matrix.toolchain == 'stable'
+        run: cargo clippy --all-targets -- -D warnings
+
+      - name: cargo test
+        run: cargo test --all-targets
