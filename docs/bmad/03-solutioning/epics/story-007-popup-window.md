@@ -1,8 +1,8 @@
 # S-007 · Popup window create + show/hide on click
 
 **Epic:** [002 Menubar UI](epic-002-menubar-ui.md)
-**Status:** Pending
-**Estimate:** M (1-2 days)
+**Status:** ✅ DONE (2026-06-01, scaffold 360×480 / decorations false / alwaysOnTop / 左键 toggle 全部验过)
+**Estimate:** M — actual scaffold + verify ~30min (dogfood 已实测弹出顺滑)
 **Owner:** caiyiwen
 
 ## Description

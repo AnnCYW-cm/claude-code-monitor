@@ -1,8 +1,8 @@
 # S-006 · Tray icon + native menu (Quit)
 
 **Epic:** [002 Menubar UI](epic-002-menubar-ui.md)
-**Status:** Pending
-**Estimate:** S (half day)
+**Status:** ✅ DONE (2026-06-01, scaffold 验证完毕 + sync_tray_title 加 "99+" 兜底)
+**Estimate:** S — actual scaffold + verify ~30min
 **Owner:** caiyiwen
 
 ## Description

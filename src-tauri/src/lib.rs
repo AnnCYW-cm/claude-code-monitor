@@ -8,18 +8,22 @@ use tauri::{
 
 /// Push the waiting count onto the tray title.
 ///
-/// Convention: `None` clears the title (count == 0) so the tray icon shows
-/// just the template glyph. A non-zero count renders as plain digits — the
-/// constitution forbids notifications, so this is the **only** signal a user
-/// gets that someone is waiting.
+/// Convention (ux-design § 2.3):
+///   waiting = 0      → no title (icon only)
+///   waiting = 1..=99 → render as plain digits
+///   waiting ≥ 100    → "99+" (avoid menubar overflow + signal "a lot")
+///
+/// `None` clears the title so the tray icon shows just the template glyph.
+/// The constitution forbids notifications, so this number is the **only**
+/// signal the user gets that someone is waiting.
 fn sync_tray_title(app: &AppHandle, waiting: usize) {
     let Some(tray) = app.tray_by_id("main") else {
         return;
     };
-    let title = if waiting > 0 {
-        Some(waiting.to_string())
-    } else {
-        None
+    let title = match waiting {
+        0 => None,
+        n if n >= 100 => Some("99+".to_string()),
+        n => Some(n.to_string()),
     };
     let _ = tray.set_title(title.as_deref());
 }

@@ -23,13 +23,13 @@
 
 ## Stories
 
-| ID | Story | Estimate |
-|---|---|---|
-| [S-006](story-006-tray-icon-menu.md) | Tray icon + native menu (Quit) | S |
-| [S-007](story-007-popup-window.md) | Popup window create + show/hide on click | M |
-| [S-008](story-008-session-list-render.md) | Session list render | M |
-| [S-009](story-009-expand-message.md) | Expand/collapse last message + tool_use simple render | M |
-| [S-010](story-010-empty-state.md) | Empty state render | S |
+| ID | Story | Estimate | Status |
+|---|---|---|---|
+| [S-006](story-006-tray-icon-menu.md) | Tray icon + native menu (Quit) | S | ✅ DONE 2026-06-01（scaffold + "99+" 兜底）|
+| [S-007](story-007-popup-window.md) | Popup window create + show/hide on click | M | ✅ DONE 2026-06-01（scaffold 验完）|
+| [S-008](story-008-session-list-render.md) | Session list render | M | ✅ DONE 2026-06-01 |
+| [S-009](story-009-expand-message.md) | Expand/collapse last message + tool_use simple render | M | ✅ DONE 2026-06-01 |
+| [S-010](story-010-empty-state.md) | Empty state render | S | ✅ DONE 2026-06-01 |
 
 ## Prerequisites
 

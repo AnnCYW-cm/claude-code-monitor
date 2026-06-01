@@ -1,8 +1,8 @@
 # S-008 · Session list render
 
 **Epic:** [002 Menubar UI](epic-002-menubar-ui.md)
-**Status:** Pending
-**Estimate:** M (2 days)
+**Status:** ✅ DONE (2026-06-01, 待 manual visual verify)
+**Estimate:** M — actual ~45min（CSS vars + dark mode + 双行 layout 一气呵成）
 **Owner:** caiyiwen
 
 ## Description

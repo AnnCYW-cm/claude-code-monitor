@@ -1,8 +1,8 @@
 # S-010 · Empty state render
 
 **Epic:** [002 Menubar UI](epic-002-menubar-ui.md)
-**Status:** Pending
-**Estimate:** S (half day)
+**Status:** ✅ DONE (2026-06-01, 随 S-008 一并落地)
+**Estimate:** S — actual ~15min
 **Owner:** caiyiwen
 
 ## Description

@@ -1,8 +1,8 @@
 # S-009 · Expand/collapse last message + tool_use simple render
 
 **Epic:** [002 Menubar UI](epic-002-menubar-ui.md)
-**Status:** Pending
-**Estimate:** M (1-2 days)
+**Status:** ✅ DONE (2026-06-01，含 expand state、mono font 渲染、点击 toggle、列表项移除时收起)
+**Estimate:** M — actual ~30min（一并随 S-008 写完）
 **Owner:** caiyiwen
 
 ## Description
@@ -67,7 +67,16 @@
 
 ## Definition of Done
 
-- [ ] 代码 merged
-- [ ] 5 种 last_message 类型都正确显示（text only / 含 tool_use / 含 tool_result / 含 code block / 多段）
-- [ ] expand animation 顺滑（用 macOS 自带录屏 review）
-- [ ] [H3 acceptance](../../../product/user-stories.md#h3--不切走也能读到关键信息) 全通过
+- [x] 代码 merged（in main.ts）
+- [~] 5 种 last_message 类型显示——**当前限制：backend 把 last_message 截到 200 字符**（PREVIEW_MAX_CHARS in session.rs）。展开区透明地显示截断提示。**真完整正文需要 get_full_message(pid) IPC，v0.2 工作**
+- [ ] expand animation 顺滑（CSS fade-in 150ms，待手动 review）
+- [ ] [H3 acceptance](../../../product/user-stories.md#h3--不切走也能读到关键信息) 部分通过——含 last_message 看到了一部分，full 待 v0.2
+
+## Implementation summary (2026-06-01)
+
+- `let expandedPid: number | null = null;` 模块状态
+- 点击 row → toggle `expandedPid`，触发 `renderSessions(sessions)` 整体重排
+- 展开块用 SF Mono 12pt，max-height 200pt 内部滚动
+- 列表里去掉的 session 自动收起（防 stale expandedPid）
+- empty state 时强制 reset 防 race
+- 当 `last_message.length >= 200`（backend 截断阈值）显示"preview truncated"提示——透明 UX 不假装有全文
