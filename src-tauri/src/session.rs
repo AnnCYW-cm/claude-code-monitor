@@ -1,9 +1,12 @@
+use libproc::libproc::bsd_info::BSDInfo;
+use libproc::libproc::proc_pid;
+use libproc::processes::{pids_by_type, ProcFilter};
 use serde::{Deserialize, Serialize};
 use std::fs::{self, File};
 use std::io::{self, Read, Seek, SeekFrom};
+use std::os::raw::{c_int, c_void};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
-use sysinfo::{Process, System, Uid};
 
 /// How fresh a JSONL file must be to count as "active". JSONL is append-only
 /// by claude — if a session's transcript hasn't been written to in this
@@ -54,72 +57,135 @@ pub struct RawProcess {
 
 /// Enumerate currently running `claude` CLI processes owned by the current user.
 ///
-/// Filters per S-001 acceptance criteria:
-/// - process name == "claude" / "claude-code", OR `cmd[0]` basename matches
-/// - process UID == current process UID (skips sudo-run instances per addendum § A.6)
-/// - process has a cwd (skips processes whose cwd cannot be read by sysinfo)
+/// **Why libproc + raw FFI instead of `sysinfo`** (2026-06-01, dogfood finding):
+/// `sysinfo` on macOS returns the underlying executable name (`"node"` for the
+/// Node-based Claude Code CLI), not the `comm` set via `process.title`, so the
+/// real `claude` CLI was being missed entirely. `sysinfo` also can't read other
+/// processes' `cwd` on macOS without root. We use libproc (the same API
+/// Activity Monitor uses) for name + uid + start time, and a hand-rolled
+/// `proc_pidinfo(PROC_PIDVNODEPATHINFO)` FFI for cwd.
+///
+/// Filters:
+/// - process name (`comm`) is one of `claude`, `claude.exe`, `claude-code`
+/// - process UID == current process UID (skips sudo-run instances and other
+///   users' processes; see [addendum § A.6](../../../../docs/bmad/02-planning/addendum.md))
+/// - cwd is resolvable via VnodePathInfo
 ///
 /// Cost target: < 25ms for 10 processes (half of NFR-P1 50ms budget).
 pub fn list_processes() -> Vec<RawProcess> {
-    let mut sys = System::new();
-    sys.refresh_processes();
-
-    let current_uid: Option<Uid> = sysinfo::get_current_pid()
-        .ok()
-        .and_then(|pid| sys.process(pid))
-        .and_then(|p| p.user_id().cloned());
-
-    sys.processes()
-        .values()
-        .filter(|p| is_claude_process(p))
-        .filter(|p| uid_matches_current(p.user_id(), current_uid.as_ref()))
-        .filter_map(extract_raw)
+    let current_uid = current_user_uid();
+    let pids = pids_by_type(ProcFilter::All).unwrap_or_default();
+    pids.into_iter()
+        .filter_map(|pid| extract_raw(pid as i32, current_uid))
         .collect()
 }
 
-/// Pure helper: name match. `cmd[0]` basename is the fallback because on macOS
-/// `Process::name()` is the short name ("claude") but for some shells the
-/// process may show up via its full path; checking basename of cmd[0] is more
-/// robust against shell wrappers.
-fn is_claude_process(p: &Process) -> bool {
-    let name_lower = p.name().to_lowercase();
-    if is_claude_name(&name_lower) {
-        return true;
-    }
-    if let Some(first_arg) = p.cmd().first() {
-        let path = Path::new(first_arg);
-        if let Some(basename) = path.file_name() {
-            return is_claude_name(&basename.to_string_lossy().to_lowercase());
-        }
-    }
-    false
+/// Get the current effective UID — used to filter to "our user's" claude
+/// processes. Always returns `Some` in practice; `None` is reserved for the
+/// rare case where we want to fail-open (e.g. tests that don't run as a
+/// real user).
+fn current_user_uid() -> Option<u32> {
+    // SAFETY: getuid() is always safe to call.
+    Some(unsafe { libc::getuid() })
 }
 
-/// Pure helper exposed for unit tests.
+/// Pure helper: does this comm name match one of the known Claude Code CLI
+/// identifiers? Exposed for unit tests.
+///
+/// Verified 2026-06-01: actual `comm` on macOS for npm-installed Claude Code
+/// 2.1.x is `claude.exe`. The `claude` and `claude-code` variants are kept as
+/// belt-and-braces for older versions / homebrew installs / shim wrappers.
 pub(crate) fn is_claude_name(lowered: &str) -> bool {
-    lowered == "claude" || lowered == "claude-code"
+    matches!(lowered, "claude" | "claude.exe" | "claude-code")
 }
 
-/// Pure helper: process UID == current process UID. Fail-open when current UID
-/// is unknown (sysinfo couldn't resolve our own process) — this is logged at
-/// the caller in production.
-pub(crate) fn uid_matches_current(proc_uid: Option<&Uid>, current_uid: Option<&Uid>) -> bool {
-    match (proc_uid, current_uid) {
-        (Some(p), Some(c)) => p == c,
-        (_, None) => true,
-        (None, Some(_)) => false,
+/// Pure helper: process UID matches current. Fail-open when current_uid is
+/// `None` (treat as "we don't know, accept it").
+pub(crate) fn uid_matches_current(proc_uid: u32, current_uid: Option<u32>) -> bool {
+    current_uid.is_none_or(|c| proc_uid == c)
+}
+
+/// Pull RawProcess for a single PID via libproc (name + BSDInfo) and raw FFI
+/// (cwd). Returns `None` if the process isn't a claude CLI, isn't ours,
+/// has no cwd, or has exited mid-scan.
+fn extract_raw(pid: i32, current_uid: Option<u32>) -> Option<RawProcess> {
+    let name = proc_pid::name(pid).ok()?;
+    if !is_claude_name(&name.to_lowercase()) {
+        return None;
     }
-}
-
-/// Extract RawProcess from a sysinfo Process, returning None if cwd is missing.
-fn extract_raw(p: &Process) -> Option<RawProcess> {
-    let cwd = p.cwd()?.to_path_buf();
-    let started_at = UNIX_EPOCH + Duration::from_secs(p.start_time());
+    let bsd = proc_pid::pidinfo::<BSDInfo>(pid, 0).ok()?;
+    if !uid_matches_current(bsd.pbi_uid, current_uid) {
+        return None;
+    }
+    let cwd = cwd_for_pid(pid)?;
+    let started_at = UNIX_EPOCH + Duration::from_secs(bsd.pbi_start_tvsec);
     Some(RawProcess {
-        pid: p.pid().as_u32(),
+        pid: pid as u32,
         cwd,
         started_at,
     })
+}
+
+// ============================================================================
+// Raw FFI: PROC_PIDVNODEPATHINFO for reading another process's cwd on macOS.
+// libproc 0.14 explicitly returns "not implemented for macos" for pidcwd, so
+// we drop down to libc. See sys/proc_info.h for the struct layout.
+// ============================================================================
+
+/// `proc_pidinfo` flavor 9 = `PROC_PIDVNODEPATHINFO`, returns the process's
+/// current + root directories as `vnode_info_path` pairs.
+const PROC_PIDVNODEPATHINFO: c_int = 9;
+
+/// Hand-computed sizes from `<sys/proc_info.h>`:
+/// - `vinfo_stat`         = 136 bytes (file stat-like)
+/// - `vnode_info`         = vinfo_stat + int + int + fsid_t = 152
+/// - `vnode_info_path`    = vnode_info + char[MAXPATHLEN] = 152 + 1024 = 1176
+/// - `proc_vnodepathinfo` = 2 × vnode_info_path = 2352 (cdir + rdir)
+const VNODE_INFO_SIZE: usize = 152;
+const MAXPATHLEN: usize = 1024;
+const VNODE_INFO_PATH_SIZE: usize = VNODE_INFO_SIZE + MAXPATHLEN;
+const PROC_VNODEPATHINFO_SIZE: usize = 2 * VNODE_INFO_PATH_SIZE;
+
+extern "C" {
+    fn proc_pidinfo(
+        pid: c_int,
+        flavor: c_int,
+        arg: u64,
+        buffer: *mut c_void,
+        buffersize: c_int,
+    ) -> c_int;
+}
+
+/// Read `pid`'s current working directory via `proc_pidinfo`.
+/// Returns `None` if the process has exited, the kernel refuses (rare, only
+/// in heavily sandboxed configurations), or the path is empty.
+pub(crate) fn cwd_for_pid(pid: i32) -> Option<PathBuf> {
+    let mut buf = vec![0u8; PROC_VNODEPATHINFO_SIZE];
+    let ret = unsafe {
+        proc_pidinfo(
+            pid,
+            PROC_PIDVNODEPATHINFO,
+            0,
+            buf.as_mut_ptr() as *mut c_void,
+            PROC_VNODEPATHINFO_SIZE as c_int,
+        )
+    };
+    if ret <= 0 {
+        return None;
+    }
+    // cwd lives at offset VNODE_INFO_SIZE within pvi_cdir (which itself starts
+    // at offset 0 of the returned buffer).
+    let path_start = VNODE_INFO_SIZE;
+    let path_end = path_start + MAXPATHLEN;
+    let path_bytes = &buf[path_start..path_end];
+    let nul = path_bytes.iter().position(|&b| b == 0).unwrap_or(0);
+    if nul == 0 {
+        None
+    } else {
+        Some(PathBuf::from(
+            String::from_utf8_lossy(&path_bytes[..nul]).into_owned(),
+        ))
+    }
 }
 
 // ============================================================================
@@ -786,16 +852,20 @@ mod tests {
     use super::*;
 
     #[test]
-    fn is_claude_name_accepts_exact_match() {
+    fn is_claude_name_accepts_known_variants() {
+        // `claude.exe` is the comm npm-installed Claude Code 2.1.x reports
+        // on macOS (verified 2026-06-01). `claude` and `claude-code` covered
+        // for older / brew installs / shim wrappers.
         assert!(is_claude_name("claude"));
+        assert!(is_claude_name("claude.exe"));
         assert!(is_claude_name("claude-code"));
     }
 
     #[test]
     fn is_claude_name_is_case_insensitive_via_caller() {
-        // Caller is expected to lowercase before calling; verify both forms.
         assert!(is_claude_name("claude"));
         assert!(!is_claude_name("Claude")); // case must be normalised upstream
+        assert!(!is_claude_name("CLAUDE.EXE"));
     }
 
     #[test]
@@ -805,32 +875,25 @@ mod tests {
         assert!(!is_claude_name(""));
         assert!(!is_claude_name("clau"));
         assert!(!is_claude_name("claude.app"));
+        assert!(!is_claude_name("node")); // the sysinfo trap we used to fall into
     }
 
     #[test]
     fn uid_matches_current_same_uid() {
-        let a = Uid::try_from(501usize).unwrap();
-        let b = Uid::try_from(501usize).unwrap();
-        assert!(uid_matches_current(Some(&a), Some(&b)));
+        assert!(uid_matches_current(501, Some(501)));
     }
 
     #[test]
     fn uid_matches_current_different_uid() {
-        let a = Uid::try_from(501usize).unwrap();
-        let b = Uid::try_from(0usize).unwrap();
-        assert!(!uid_matches_current(Some(&a), Some(&b)));
+        assert!(!uid_matches_current(501, Some(0)));
     }
 
     #[test]
     fn uid_matches_current_fails_open_when_current_unknown() {
-        let a = Uid::try_from(501usize).unwrap();
-        assert!(uid_matches_current(Some(&a), None));
-    }
-
-    #[test]
-    fn uid_matches_current_rejects_when_proc_uid_missing_but_current_known() {
-        let c = Uid::try_from(501usize).unwrap();
-        assert!(!uid_matches_current(None, Some(&c)));
+        // Treat "we don't know our own uid" as "accept any" — better than
+        // erroring out and showing zero sessions.
+        assert!(uid_matches_current(501, None));
+        assert!(uid_matches_current(0, None));
     }
 
     // ------------------------------------------------------------------------
