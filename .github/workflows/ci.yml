@@ -14,15 +14,15 @@ concurrency:
 
 jobs:
   rust:
-    name: Rust ${{ matrix.toolchain }} (macOS)
+    name: Rust stable (macOS)
     runs-on: macos-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        # `stable` catches new clippy lints that ship with each release;
-        # `1.77` matches the rust-version floor declared in Cargo.toml,
-        # ensuring we don't accidentally rely on newer compiler features.
-        toolchain: [stable, "1.77"]
+
+    # Single-toolchain CI on purpose. We tried matrixing stable + 1.77 (the
+    # original rust-version floor) but Tauri 2.x's transitive deps now require
+    # edition2024 (Rust 1.85+), so 1.77 can't compile the project at all.
+    # Maintaining an MSRV older than what the deps require is busywork for
+    # zero benefit — users install via rustup (always recent stable) or via
+    # the notarized .app (no Rust on the user's machine).
 
     defaults:
       run:
@@ -31,9 +31,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: dtolnay/rust-toolchain@master
+      - uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: ${{ matrix.toolchain }}
           components: rustfmt, clippy
 
       - uses: Swatinem/rust-cache@v2
@@ -41,15 +40,9 @@ jobs:
           workspaces: src-tauri
 
       - name: cargo fmt --check
-        # Only enforce formatting on `stable` — older toolchains may format
-        # slightly differently and we don't want the floor build to fail on
-        # cosmetic drift.
-        if: matrix.toolchain == 'stable'
         run: cargo fmt --check
 
       - name: cargo clippy --all-targets -- -D warnings
-        # Same reason: clippy lint set evolves, gate on `stable` only.
-        if: matrix.toolchain == 'stable'
         run: cargo clippy --all-targets -- -D warnings
 
       - name: cargo test

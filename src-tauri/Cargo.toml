@@ -4,7 +4,11 @@ version = "0.1.0"
 description = "Menubar app that shows which Claude Code sessions are waiting for you."
 authors = ["Yiwen Cai"]
 edition = "2021"
-rust-version = "1.77"
+# Bumped from 1.77 → 1.85 (2026-06-01) because Tauri 2.x's transitive deps
+# require edition2024, which stabilised in Rust 1.85. Users running rustup
+# stable always have something newer; the floor is set to the actual minimum
+# that compiles.
+rust-version = "1.85"
 
 [lib]
 name = "claude_code_monitor_lib"

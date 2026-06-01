@@ -4,7 +4,7 @@
 
 [![CI](https://github.com/AnnCYW-cm/claude-code-monitor/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/AnnCYW-cm/claude-code-monitor/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
-[![Rust](https://img.shields.io/badge/rust-1.77%2B-orange.svg)](https://www.rust-lang.org)
+[![Rust](https://img.shields.io/badge/rust-1.85%2B-orange.svg)](https://www.rust-lang.org)
 [![Platform](https://img.shields.io/badge/platform-macOS-lightgrey.svg)](#)
 
 **Status:** alpha — backend pipeline (Epic 1, S-001..S-005) complete and tested
@@ -40,7 +40,7 @@ JSONL schema verified against Claude Code 2.1.126 — see [`docs/spec/jsonl-sche
 
 ## Develop
 
-Prerequisites: macOS, Node 18+, Rust 1.77+.
+Prerequisites: macOS, Node 18+, Rust 1.85+ (Tauri 2.x transitive deps need edition2024).
 
 ```bash
 npm install
