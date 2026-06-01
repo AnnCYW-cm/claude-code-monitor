@@ -1,0 +1,104 @@
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+  font-size: 13px;
+  color: #1c1c1e;
+  background: #f5f5f7;
+  width: 360px;
+  min-height: 200px;
+  -webkit-font-smoothing: antialiased;
+}
+
+header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 14px;
+  border-bottom: 1px solid #e5e5ea;
+  background: #fff;
+}
+
+h1 {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+button {
+  background: #fff;
+  border: 1px solid #d1d1d6;
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-size: 12px;
+  cursor: pointer;
+  color: #1c1c1e;
+}
+
+button:hover {
+  background: #f5f5f7;
+}
+
+ul {
+  list-style: none;
+}
+
+.session {
+  padding: 10px 14px;
+  border-bottom: 1px solid #e5e5ea;
+  cursor: pointer;
+}
+
+.session:hover {
+  background: #efeff4;
+}
+
+.row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.name {
+  font-weight: 500;
+}
+
+.status {
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  text-transform: lowercase;
+}
+
+.session.waiting .status {
+  background: #ffd60a33;
+  color: #875a00;
+}
+
+.session.working .status {
+  background: #34c75933;
+  color: #006622;
+}
+
+.session.unknown .status {
+  background: #d1d1d6;
+  color: #666;
+}
+
+.msg {
+  margin-top: 4px;
+  color: #6e6e73;
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.empty {
+  padding: 24px 14px;
+  text-align: center;
+  color: #aeaeb2;
+}
