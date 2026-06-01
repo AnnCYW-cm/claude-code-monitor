@@ -8,11 +8,17 @@ use std::os::raw::{c_int, c_void};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-/// How fresh a JSONL file must be to count as "active". JSONL is append-only
-/// by claude — if a session's transcript hasn't been written to in this
-/// window we assume the session is dead even though the process is still
-/// listed (S-002 acceptance + addendum § A.1).
-const ACTIVE_JSONL_WINDOW: Duration = Duration::from_secs(60);
+/// How fresh a JSONL file must be to count as "active". Sanity check to skip
+/// truly-stale jsonl from test sessions abandoned weeks ago.
+///
+/// **Bumped 2026-06-01 from 60s → 7 days** (dogfood finding #2): the original
+/// 60s window was supposed to disambiguate same-cwd multi-process pairings,
+/// but in real use the most common pattern is "session sitting idle while
+/// user thinks / steps away". A Waiting session that's idle for 6 minutes is
+/// exactly what the tray should highlight — silently demoting it to Unknown
+/// defeats the product. 7 days keeps the sanity check against jsonl from
+/// abandoned test runs while accepting all real idle sessions.
+const ACTIVE_JSONL_WINDOW: Duration = Duration::from_secs(7 * 24 * 60 * 60);
 
 /// Classification of a claude session's current state.
 ///
@@ -1014,9 +1020,9 @@ mod tests {
         let dir = TempDir::new().unwrap();
         touch_jsonl(dir.path(), "stale.jsonl");
 
-        // Advance "now" past the 60s window — file's actual mtime is ~now, but
-        // we pretend it's 2 minutes later.
-        let future = SystemTime::now() + Duration::from_secs(120);
+        // Advance "now" past the 7-day active window (post-dogfood) — file's
+        // actual mtime is ~now, but we pretend it's 8 days later.
+        let future = SystemTime::now() + Duration::from_secs(8 * 24 * 60 * 60);
 
         let err = locate_jsonl_in_dir(dir.path(), future).unwrap_err();
         assert!(matches!(err, LocateError::NoActiveJsonl), "got {:?}", err);
