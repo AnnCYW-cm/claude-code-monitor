@@ -1,3 +1,4 @@
+pub mod logger;
 pub mod session;
 
 use tauri::{
@@ -37,6 +38,17 @@ fn list_sessions(app: AppHandle) -> Vec<session::Session> {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // Init file logger before anything else so startup errors land in the log.
+    // If init fails we fall back to stderr — no logging is better than no app.
+    match logger::init() {
+        Ok(path) => log::info!(
+            "startup: claude-code-monitor v{} (log path: {})",
+            env!("CARGO_PKG_VERSION"),
+            path.display()
+        ),
+        Err(e) => eprintln!("[logger init failed: {} — continuing without logging]", e),
+    }
+
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .invoke_handler(tauri::generate_handler![list_sessions])

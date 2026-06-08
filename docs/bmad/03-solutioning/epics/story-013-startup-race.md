@@ -1,8 +1,8 @@
 # S-013 · Startup race: process exists but JSONL not yet
 
 **Epic:** [003 Robustness](epic-003-robustness.md)
-**Status:** Pending
-**Estimate:** S (half day)
+**Status:** ✅ DONE (2026-06-08, build_session 区分 startup race vs parse failure + unit test)
+**Estimate:** S — actual ~15min（实现已含在 S-011 refactor，主要是加 test）
 **Owner:** caiyiwen
 
 ## Description

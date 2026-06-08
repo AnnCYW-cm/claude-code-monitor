@@ -766,26 +766,88 @@ const TAIL_LINES_FOR_CLASSIFY: usize = 20;
 /// truncates further visually; this is just to bound the IPC payload.
 const PREVIEW_MAX_CHARS: usize = 200;
 
-/// Full per-process pipeline: locate JSONL → tail multi-line → reverse-scan to
-/// last meaningful envelope → classify → enrich. Any single-step failure
-/// degrades to `Unknown` rather than aborting — the UI shows "Unknown" with no
-/// preview, and the next refresh retries.
-fn build_session(raw: &RawProcess) -> Session {
-    let mut session = Session {
+/// Build an "Unknown" placeholder Session for a process whose state we
+/// couldn't determine. Used by:
+/// - `build_session` parse-failure paths (S-011)
+/// - `build_session` startup-race path (S-013) — process exists but JSONL
+///   not yet written by claude
+/// - `list()` catch_unwind panic fallback (S-011 panic isolation)
+///
+/// `last_message`:
+/// - `None` → startup race or "no info, retry next tick" (silent UX)
+/// - `Some("(unable to read transcript)")` → JSONL exists but parsing
+///   failed; surfaces honestly to the user that this isn't startup race
+pub(crate) fn unknown_session(raw: &RawProcess, last_message: Option<String>) -> Session {
+    Session {
         pid: raw.pid,
         cwd: raw.cwd.to_string_lossy().into_owned(),
         status: SessionStatus::Unknown,
-        last_message: None,
+        last_message,
         last_update_unix: None,
         waiting_since_unix: None,
+    }
+}
+
+/// Human-facing reason shown when JSONL exists but we couldn't parse it.
+const PARSE_FAILURE_MSG: &str = "(unable to read transcript)";
+
+/// Full per-process pipeline: locate JSONL → tail multi-line → reverse-scan to
+/// last meaningful envelope → classify → enrich. Failures are split into two
+/// classes:
+///
+/// - **Startup race** (S-013): process exists but the JSONL directory or
+///   files don't yet — `DirNotFound` or `NoJsonlFiles`. Returns Unknown
+///   with no message; logs at DEBUG level since this is expected and
+///   self-recovers on the next refresh tick.
+/// - **Parse failure** (S-011): the JSONL exists but we couldn't read it
+///   (IO error / tail failed). Returns Unknown with a "(unable to read
+///   transcript)" message so the user knows it's not just a new session;
+///   logs at WARN level so the dev can investigate.
+///
+/// `pub(crate)` so unit tests can exercise it directly without going
+/// through `list_processes()`.
+pub(crate) fn build_session(raw: &RawProcess) -> Session {
+    let path = match locate_jsonl(raw) {
+        Ok(p) => p,
+        Err(LocateError::DirNotFound) | Err(LocateError::NoJsonlFiles) => {
+            // S-013: claude probably just started; jsonl not yet written.
+            log::debug!(
+                "pid={} startup race: no jsonl at cwd={}",
+                raw.pid,
+                raw.cwd.display()
+            );
+            return unknown_session(raw, None);
+        }
+        Err(LocateError::NoActiveJsonl) => {
+            // Very stale (> 7 days) — process is alive but jsonl rotted.
+            // Treat as parse-failure UX so user knows something's odd.
+            log::warn!(
+                "pid={} no active jsonl in cwd={} — process running but transcript stale",
+                raw.pid,
+                raw.cwd.display()
+            );
+            return unknown_session(raw, Some(PARSE_FAILURE_MSG.to_string()));
+        }
+        Err(LocateError::IoError(e)) => {
+            log::warn!("pid={} locate_jsonl io error: {}", raw.pid, e);
+            return unknown_session(raw, Some(PARSE_FAILURE_MSG.to_string()));
+        }
     };
 
-    let Ok(path) = locate_jsonl(raw) else {
-        return session;
+    let lines = match tail_lines(&path, TAIL_LINES_FOR_CLASSIFY) {
+        Ok(l) => l,
+        Err(e) => {
+            log::warn!(
+                "pid={} tail_lines failed for {}: {}",
+                raw.pid,
+                path.display(),
+                e
+            );
+            return unknown_session(raw, Some(PARSE_FAILURE_MSG.to_string()));
+        }
     };
-    let Ok(lines) = tail_lines(&path, TAIL_LINES_FOR_CLASSIFY) else {
-        return session;
-    };
+
+    let mut session = unknown_session(raw, None);
     let env_opt = last_meaningful(&lines);
     if let Some(env) = &env_opt {
         session.last_update_unix = parse_iso8601_utc(&env.timestamp);
@@ -861,21 +923,19 @@ pub(crate) fn sort_sessions(sessions: &mut [Session]) {
 ///
 /// Per-session work is wrapped in `catch_unwind` so that a single corrupted
 /// JSONL or unexpected panic degrades to an `Unknown` row instead of taking
-/// the whole list down. Full structured panic isolation arrives in S-011;
-/// this is the lightweight fallback.
+/// the whole list down (S-011 panic isolation, [NFR-R1](../../../../docs/bmad/02-planning/PRD.md)).
 pub fn list() -> Vec<Session> {
     let raws = list_processes();
     let mut sessions: Vec<Session> = raws
         .iter()
         .map(|raw| {
             std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| build_session(raw)))
-                .unwrap_or_else(|_| Session {
-                    pid: raw.pid,
-                    cwd: raw.cwd.to_string_lossy().into_owned(),
-                    status: SessionStatus::Unknown,
-                    last_message: None,
-                    last_update_unix: None,
-                    waiting_since_unix: None,
+                .unwrap_or_else(|_panic| {
+                    log::error!(
+                        "pid={} build_session panicked — isolated, other sessions unaffected",
+                        raw.pid
+                    );
+                    unknown_session(raw, Some(PARSE_FAILURE_MSG.to_string()))
                 })
         })
         .collect();
@@ -1675,6 +1735,65 @@ mod tests {
     fn status_priority_ordering() {
         assert!(status_priority(SessionStatus::Waiting) < status_priority(SessionStatus::Working));
         assert!(status_priority(SessionStatus::Working) < status_priority(SessionStatus::Unknown));
+    }
+
+    // ------------------------------------------------------------------------
+    // S-011 / S-013 · Error handling + startup race
+    // ------------------------------------------------------------------------
+
+    fn fake_raw(pid: u32, cwd: &str) -> RawProcess {
+        RawProcess {
+            pid,
+            cwd: PathBuf::from(cwd),
+            started_at: SystemTime::now(),
+        }
+    }
+
+    #[test]
+    fn unknown_session_for_startup_race_has_no_message() {
+        // S-013: process just started, JSONL not yet written. Surfacing
+        // "(unable to read transcript)" here would lie about the cause —
+        // user would think the app is broken. Keep silent.
+        let raw = fake_raw(12345, "/tmp/some-cwd");
+        let s = unknown_session(&raw, None);
+        assert_eq!(s.status, SessionStatus::Unknown);
+        assert_eq!(s.last_message, None);
+        assert_eq!(s.pid, 12345);
+        assert_eq!(s.cwd, "/tmp/some-cwd");
+        assert_eq!(s.waiting_since_unix, None);
+        assert_eq!(s.last_update_unix, None);
+    }
+
+    #[test]
+    fn unknown_session_for_parse_failure_includes_message() {
+        // S-011: JSONL exists but couldn't be parsed — user deserves to
+        // know it's not a transient startup race.
+        let raw = fake_raw(54321, "/Users/x/proj");
+        let s = unknown_session(&raw, Some(PARSE_FAILURE_MSG.to_string()));
+        assert_eq!(s.status, SessionStatus::Unknown);
+        assert_eq!(s.last_message.as_deref(), Some(PARSE_FAILURE_MSG));
+        assert_eq!(s.pid, 54321);
+    }
+
+    #[test]
+    fn build_session_returns_startup_race_unknown_when_jsonl_dir_missing() {
+        // S-013 end-to-end: synthesize a RawProcess whose cwd encodes to a
+        // jsonl directory that almost certainly doesn't exist under
+        // ~/.claude/projects/. build_session should return Unknown with
+        // no last_message (the silent startup-race UX) rather than the
+        // alarmist parse-failure message.
+        let raw = fake_raw(
+            999_999,
+            "/nonexistent-path-for-S013-test-do-not-create-this-dir",
+        );
+        let s = build_session(&raw);
+        assert_eq!(s.status, SessionStatus::Unknown);
+        assert_eq!(
+            s.last_message, None,
+            "startup race (DirNotFound) must produce no message — got {:?}",
+            s.last_message
+        );
+        assert_eq!(s.pid, 999_999);
     }
 
     #[test]

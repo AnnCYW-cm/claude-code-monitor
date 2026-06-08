@@ -1,8 +1,8 @@
 # S-011 · JSONL parse failure → Unknown + per-session panic isolation
 
 **Epic:** [003 Robustness](epic-003-robustness.md)
-**Status:** Pending
-**Estimate:** M (1-2 days)
+**Status:** ✅ DONE (2026-06-08, panic isolation + parse-failure UX + 3 new unit tests)
+**Estimate:** M — actual ~45min (catch_unwind 已有，主要是 refactor + log + UX 区分)
 **Owner:** caiyiwen
 
 ## Description

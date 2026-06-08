@@ -19,11 +19,11 @@
 
 ## Stories
 
-| ID | Story | Estimate |
-|---|---|---|
-| [S-011](story-011-error-handling.md) | JSONL parse failure → Unknown + per-session panic isolation | M |
-| [S-012](story-012-logging.md) | Logging to `~/Library/Logs/...` | S |
-| [S-013](story-013-startup-race.md) | Startup race: process exists but JSONL not yet | S |
+| ID | Story | Estimate | Status |
+|---|---|---|---|
+| [S-011](story-011-error-handling.md) | JSONL parse failure → Unknown + per-session panic isolation | M | ✅ DONE 2026-06-08 |
+| [S-012](story-012-logging.md) | Logging to `~/Library/Logs/...` | S | ✅ DONE 2026-06-08 |
+| [S-013](story-013-startup-race.md) | Startup race: process exists but JSONL not yet | S | ✅ DONE 2026-06-08 |
 
 ## Prerequisites
 

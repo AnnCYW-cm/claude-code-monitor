@@ -1,8 +1,8 @@
 # S-012 · Logging to `~/Library/Logs/...`
 
 **Epic:** [003 Robustness](epic-003-robustness.md)
-**Status:** Pending
-**Estimate:** S (half day)
+**Status:** ✅ DONE (2026-06-08, hand-roll 极简 file logger + 5 unit tests)
+**Estimate:** S — actual ~45min
 **Owner:** caiyiwen
 
 ## Description

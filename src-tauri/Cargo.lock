@@ -366,6 +366,7 @@ dependencies = [
  "dirs 5.0.1",
  "libc",
  "libproc",
+ "log",
  "serde",
  "serde_json",
  "tauri",
