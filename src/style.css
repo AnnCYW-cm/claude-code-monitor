@@ -76,8 +76,10 @@ body {
  * ============================================================ */
 
 header {
-  display: flex;
-  justify-content: space-between;
+  /* 3-column grid keeps title true-centered regardless of button width:
+     left spacer | title | refresh */
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
   align-items: center;
   padding: 18px 24px;
   border-bottom: 1px solid var(--separator-color);
@@ -86,10 +88,17 @@ header {
 }
 
 header h1 {
+  grid-column: 2;
   font-size: 18px;
   font-weight: 600;
   color: var(--label-color);
   letter-spacing: -0.3px;
+  text-align: center;
+}
+
+header button#refresh {
+  grid-column: 3;
+  justify-self: end;
 }
 
 button#refresh {
