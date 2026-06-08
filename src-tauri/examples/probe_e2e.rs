@@ -40,13 +40,20 @@ fn main() {
         })
         .count();
 
-    println!("ps ground truth: {} claude processes for uid {}", ps_count, my_uid);
+    println!(
+        "ps ground truth: {} claude processes for uid {}",
+        ps_count, my_uid
+    );
 
     // Backend layer 1: list_processes (S-001)
     let t0 = Instant::now();
     let raws = list_processes();
     let t_enum = t0.elapsed();
-    println!("\n--- S-001 list_processes() -> {} procs ({:?}) ---", raws.len(), t_enum);
+    println!(
+        "\n--- S-001 list_processes() -> {} procs ({:?}) ---",
+        raws.len(),
+        t_enum
+    );
     for r in &raws {
         println!("  pid={} cwd={:?}", r.pid, r.cwd);
     }
@@ -55,7 +62,11 @@ fn main() {
     let t0 = Instant::now();
     let sessions = list();
     let t_list = t0.elapsed();
-    println!("\n--- S-005 session::list() -> {} sessions ({:?}) ---", sessions.len(), t_list);
+    println!(
+        "\n--- S-005 session::list() -> {} sessions ({:?}) ---",
+        sessions.len(),
+        t_list
+    );
     for s in &sessions {
         let msg_preview = s
             .last_message
@@ -91,8 +102,24 @@ fn main() {
     println!("\n=== Health summary ===");
     let p_enum = t_enum.as_millis();
     let p_list = t_list.as_millis();
-    println!("  list_processes(): {}ms {}", p_enum, if p_enum < 25 { "✅ NFR-P1 (<25ms)" } else { "⚠️  over 25ms" });
-    println!("  list():           {}ms {}", p_list, if p_list < 50 { "✅ NFR-P1 (<50ms)" } else { "⚠️  over 50ms" });
+    println!(
+        "  list_processes(): {}ms {}",
+        p_enum,
+        if p_enum < 25 {
+            "✅ NFR-P1 (<25ms)"
+        } else {
+            "⚠️  over 25ms"
+        }
+    );
+    println!(
+        "  list():           {}ms {}",
+        p_list,
+        if p_list < 50 {
+            "✅ NFR-P1 (<50ms)"
+        } else {
+            "⚠️  over 50ms"
+        }
+    );
 
     if ps_count == 0 {
         println!("  ps vs ours:       skip (no live claude on host)");

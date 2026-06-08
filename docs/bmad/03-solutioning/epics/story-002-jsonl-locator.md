@@ -1,8 +1,8 @@
 # S-002 · JSONL locator
 
 **Epic:** [001 Core Monitoring](epic-001-core-monitoring.md)
-**Status:** ✅ DONE (2026-05-18, 13 unit + 2 integration tests pass)
-**Estimate:** M — actual ~45min (impl + tests)
+**Status:** ✅ DONE (2026-05-18 initial, 2026-06-08 hardened with birth-time pairing — 16 unit + 2 integration tests pass)
+**Estimate:** M — initial ~45min + pairing fix ~1h
 **Owner:** caiyiwen
 
 ## Description
@@ -135,3 +135,37 @@ fn encode_cwd_replaces_slashes_with_dashes() {
 - `ACTIVE_JSONL_WINDOW` const = 60s
 - Future-mtime（clock skew）permissive 接受
 - Test split: deterministic cases as unit tests (in-crate, can call `pub(crate)`); live-env smoke as integration test (`tests/jsonl_locator.rs`)
+
+## Hardening (2026-06-08) · Birth-time pairing fix
+
+**Problem (surfaced by e2e probe 2026-06-06)**: when N claude sessions all
+start from the same cwd (very common pattern — user opens 3 terminals in
+home dir), mtime-newest pairing maps all N processes to the same (most
+recently written) jsonl. Result: tray + popup show identical state for
+all "same cwd" sessions, hiding individual progress.
+
+**Fix**: extended `locate_jsonl_in_dir` signature to take
+`proc_started_at: Option<SystemTime>`.
+
+- When `Some(t)`: among active candidates, pick the jsonl whose **file
+  birth time** is closest to `t` (Duration-based comparison, not
+  truncated seconds — APFS gives nanosecond precision).
+- When `None`: legacy mtime-newest behaviour, used by tests that
+  don't model a process.
+
+`locate_jsonl(proc)` now passes `Some(proc.started_at)`. Live verification
+via `cargo run --example probe_e2e`: 3 PIDs in `/Users/caiyiwen` paired to
+3 distinct jsonls with delta 13s/43s/206s.
+
+`Metadata::created()` is supported on APFS (Apple's default since 10.13).
+Falls back to mtime on HFS+ / NTFS / etc. The 3-pass structure (collect →
+filter active → pick) keeps the cost flat: 1-2ms per call on a host with
+16 candidate jsonls.
+
+New tests:
+- `locate_pairs_by_birth_time_when_proc_started_at_given`
+- `locate_falls_back_to_mtime_newest_when_no_proc_started_at`
+- `locate_pairs_to_only_active_candidate_when_one_is_stale`
+
+Permanent diagnostic: `cargo run --example probe_pairing` shows pairing
+decisions for all live claude processes.
