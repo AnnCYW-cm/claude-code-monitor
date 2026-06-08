@@ -22,14 +22,14 @@
 
 ### 文档 placeholder sweep（release 前必做）
 
-文档里 13 处 `<owner>` 占位 + 5 处 "GitHub Release URL 待填" 必须替换为真实值：
+文档里 13 处 `AnnCYW-cm` 占位 + 5 处 "GitHub Release URL 待填" 必须替换为真实值：
 
 ```bash
-# 找所有 <owner> 占位
-grep -rn "<owner>" docs/ README.md CHANGELOG.md SECURITY.md .github/
+# 找所有 AnnCYW-cm 占位
+grep -rn "AnnCYW-cm" docs/ README.md CHANGELOG.md SECURITY.md .github/
 
 # Sweep（假设 owner = caiyiwen）
-grep -rl "<owner>" . | xargs sed -i '' 's|<owner>|caiyiwen|g'
+grep -rl "AnnCYW-cm" . | xargs sed -i '' 's|AnnCYW-cm|caiyiwen|g'
 
 # 填 GitHub Release URL（DMG 上传后）
 # 在 docs/guides/install.md + SECURITY.md 找 "URL 待 v0.1 release 后填入" 处填上
@@ -86,7 +86,7 @@ Anti-features (won't change):
 
 Built with Tauri 2.x + Rust + vanilla TypeScript. ~10MB bundle.
 
-Open source MIT: https://github.com/<owner>/claude-code-monitor
+Open source MIT: https://github.com/AnnCYW-cm/claude-code-monitor
 
 Docs cover BMAD-method process (PRD, decision log, 13 dev stories, etc) —
 might be useful as a reference for solo open-source dev tools.
@@ -114,7 +114,7 @@ Claude Code sessions is waiting for input.
 
 no notifications, no settings, no nothing — just a number you can glance at.
 
-open source MIT: github.com/<owner>/claude-code-monitor
+open source MIT: github.com/AnnCYW-cm/claude-code-monitor
 
 #ClaudeCode #DevTools
 ```
@@ -128,7 +128,7 @@ TIL while building this:
 - "End of turn" signal is message.stop_reason == "end_turn" (not "no pending tool_use" 😅)
 - Same session's cwd field can change mid-transcript when user `cd`s
 
-full schema spec: github.com/<owner>/claude-code-monitor/blob/main/docs/spec/jsonl-schema.md
+full schema spec: github.com/AnnCYW-cm/claude-code-monitor/blob/main/docs/spec/jsonl-schema.md
 ```
 
 **Tweet 3** (next day, meta):
@@ -152,7 +152,7 @@ i'll write a retrospective when v1.0 ships.
 
 ```
 hey - just shipped a tiny utility for those of us running multiple
-parallel claude code sessions: github.com/<owner>/claude-code-monitor
+parallel claude code sessions: github.com/AnnCYW-cm/claude-code-monitor
 
 menubar app, shows which session is waiting for input. zero config,
 no notifications, completely local. mac only for now.
@@ -181,7 +181,7 @@ would love feedback from heavy users.
 
 没有通知（不会打扰），没有配置（装完即用），不联网（完全本地）。
 
-GitHub: https://github.com/<owner>/claude-code-monitor
+GitHub: https://github.com/AnnCYW-cm/claude-code-monitor
 
 挺简单的工具，但文档写得过分认真（12K 行 doc / 270 行 scaffold）。
 开源项目 + 单作者 + 想让未来的 contributor 接得住，所以...

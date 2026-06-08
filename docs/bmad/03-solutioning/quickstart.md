@@ -30,7 +30,7 @@ sw_vers              # ProductVersion: 12 / 14 / 15
 ### 1.2 Clone + build
 
 ```bash
-git clone https://github.com/<owner>/claude-code-monitor.git
+git clone https://github.com/AnnCYW-cm/claude-code-monitor.git
 cd claude-code-monitor
 npm install                # ~3 min, installs Tauri CLI etc
 npm run tauri:dev          # first time: 10-15 min (downloads ~500MB crates)

@@ -7,8 +7,10 @@
 [![Rust](https://img.shields.io/badge/rust-1.85%2B-orange.svg)](https://www.rust-lang.org)
 [![Platform](https://img.shields.io/badge/platform-macOS-lightgrey.svg)](#)
 
-**Status:** alpha — backend pipeline (Epic 1, S-001..S-005) complete and tested
-(84 tests pass). Menubar UI in progress; no signed release `.app` yet.
+**Status:** alpha — all 13 MVP stories shipped (Epics 1+2+3), 95 tests pass.
+End-to-end pipeline works: tray icon shows accurate waiting count, popup lists
+sessions with status + last message preview, expand row to see full text.
+No signed release `.app` yet — install from source for now.
 
 ## Why
 
@@ -36,7 +38,37 @@ JSONL schema verified against Claude Code 2.1.126 — see [`docs/spec/jsonl-sche
 
 - [Tauri 2.x](https://tauri.app) — Rust backend, web frontend, ~10MB bundle
 - TypeScript + Vite (no framework — the popup is a single list)
-- `sysinfo` for process enumeration
+- `libproc` + raw `proc_pidinfo` FFI for process enumeration + cwd (Activity Monitor uses the same APIs; `sysinfo` returns the wrong comm name for Node-based CLIs on macOS — see commit `32134e9`)
+- Hand-rolled file logger (no `chrono`/`tokio` deps; one transitive crate `log = "0.4"`)
+
+## v0.1 alpha — what works today
+
+Built end-to-end and verified against a real 3-session macOS environment:
+
+- ✅ Detects all running `claude` CLI processes for the current user
+- ✅ Pairs each process to its own JSONL by file birth time (handles the case where multiple sessions share a cwd — common when running `claude` from `~/`)
+- ✅ Classifies each session as Waiting / Working / Unknown based on the last `message.stop_reason` in its JSONL
+- ✅ Tray title shows the count of Waiting sessions, clamped to `99+` if more than 99
+- ✅ Popup window with traffic-light chrome, centered title, draggable
+- ✅ Per-row status badge (yellow / green / gray) + duration ("3min" / "just now") + single-line preview
+- ✅ Click row to expand the full last message in monospace
+- ✅ Auto light/dark mode via system tokens
+- ✅ Per-session panic isolation: one corrupt JSONL won't take down the whole list
+- ✅ Logs to `~/Library/Logs/com.caiyiwen.claude-code-monitor/main.log` for postmortem
+- ✅ Quit cleanly from the tray menu
+
+**Performance** (M-series Mac, debug build):
+- `list_processes()`: ~1ms (NFR budget: 25ms)
+- Full `session::list()` IPC: ~5-8ms with 3 live sessions (NFR budget: 50ms)
+- 10MB JSONL tail read: ~0.8ms
+
+**Known limitations** (deferred to v0.2+):
+
+- No signed/notarized DMG yet — first launch requires the [Gatekeeper bypass](./docs/guides/install.md#gatekeeper-bypass-首次打开未签名-app)
+- `last_message` preview is capped at 200 chars by the IPC layer; "expand" shows the same preview, not the full transcript (would need a separate `get_full_message(pid)` IPC)
+- macOS only — no Windows / Linux plans
+- No proper test fixture for parse-failure path; relies on real-env dogfood
+- Window remembers no position between launches
 
 ## Develop
 
@@ -59,17 +91,41 @@ Output lands in `src-tauri/target/release/bundle/`.
 
 ## Roadmap
 
-### MVP (v0.1)
+### MVP (v0.1) — code complete, awaiting release packaging
 
-- [x] Project scaffold
-- [x] Enumerate running `claude` processes ([S-001](./docs/bmad/03-solutioning/epics/story-001-process-enumeration.md))
-- [x] Locate active JSONL per process ([S-002](./docs/bmad/03-solutioning/epics/story-002-jsonl-locator.md))
-- [x] Multi-MB JSONL tail reader ([S-003](./docs/bmad/03-solutioning/epics/story-003-jsonl-tail-reader.md))
-- [x] Parse last message → waiting / working / unknown ([S-004](./docs/bmad/03-solutioning/epics/story-004-status-classifier.md))
-- [x] `list_sessions` IPC + tray title sync ([S-005](./docs/bmad/03-solutioning/epics/story-005-list-sessions-command.md))
-- [ ] Popup list with cwd / status / last message preview (Epic 2)
-- [ ] Click row to expand full last message (Epic 2)
-- [ ] Notarized `.app` for download (v0.1 release blocker)
+**Epic 1 · Core monitoring**
+- [x] [S-001](./docs/bmad/03-solutioning/epics/story-001-process-enumeration.md) Enumerate running `claude` processes (libproc + raw FFI)
+- [x] [S-002](./docs/bmad/03-solutioning/epics/story-002-jsonl-locator.md) Locate active JSONL per process (birth-time pairing)
+- [x] [S-003](./docs/bmad/03-solutioning/epics/story-003-jsonl-tail-reader.md) Multi-MB JSONL tail reader (seek-from-end)
+- [x] [S-004](./docs/bmad/03-solutioning/epics/story-004-status-classifier.md) Parse last message → waiting/working/unknown
+- [x] [S-005](./docs/bmad/03-solutioning/epics/story-005-list-sessions-command.md) `list_sessions` IPC + tray title sync
+
+**Epic 2 · Menubar UI**
+- [x] [S-006](./docs/bmad/03-solutioning/epics/story-006-tray-icon-menu.md) Tray icon + native Quit menu
+- [x] [S-007](./docs/bmad/03-solutioning/epics/story-007-popup-window.md) Popup window create + click toggle
+- [x] [S-008](./docs/bmad/03-solutioning/epics/story-008-session-list-render.md) Session list render with status badges + duration
+- [x] [S-009](./docs/bmad/03-solutioning/epics/story-009-expand-message.md) Expand/collapse last message
+- [x] [S-010](./docs/bmad/03-solutioning/epics/story-010-empty-state.md) Empty state with hint
+
+**Epic 3 · Robustness**
+- [x] [S-011](./docs/bmad/03-solutioning/epics/story-011-error-handling.md) JSONL parse failure → Unknown + panic isolation
+- [x] [S-012](./docs/bmad/03-solutioning/epics/story-012-logging.md) Logging to `~/Library/Logs/...`
+- [x] [S-013](./docs/bmad/03-solutioning/epics/story-013-startup-race.md) Startup race: process exists but JSONL not yet
+
+**Release blockers** (not story-tracked):
+- [ ] Notarized `.app` + DMG (avoid Gatekeeper warning) — currently $99/yr Apple Developer Program cost; deferring until alpha user feedback justifies
+- [ ] 14-day formal dogfood retro using [the full template](./docs/guides/dogfood-retrospective-template.md)
+- [ ] `cargo bench` (T020) for tracked perf baselines
+
+### v0.2+ candidates
+
+See [docs/roadmap/v0.2.md](./docs/roadmap/v0.2.md) for the full list. Highlights:
+
+- `get_full_message(pid)` IPC so "expand" shows the full transcript, not the truncated 200-char preview
+- Anchor popup to tray icon position instead of center-screen default
+- Window position memory across launches
+- Auto-hide popup when focus leaves
+- Subsecond mtime check for sessions in same cwd (sharper pairing than birth time)
 
 ### Explicitly out of scope for MVP
 

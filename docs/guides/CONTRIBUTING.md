@@ -127,7 +127,7 @@ constitution 列了几条**永远不会改**的原则。**任何 PR 违反这些
 
 ```bash
 # Prerequisites: macOS 12+, Node 18+, Rust 1.77+
-git clone https://github.com/<owner>/claude-code-monitor.git
+git clone https://github.com/AnnCYW-cm/claude-code-monitor.git
 cd claude-code-monitor
 npm install
 npm run tauri:dev

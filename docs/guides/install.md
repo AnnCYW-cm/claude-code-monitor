@@ -24,10 +24,10 @@ brew install --cask claude-code-monitor
 
 ### C. Build from source
 
-需要 Node 18+ / Rust 1.77+ / macOS 12+。
+需要 Node 18+ / Rust **1.85+**（Tauri 2.x transitive deps 要 edition2024）/ macOS 12+。
 
 ```bash
-git clone https://github.com/<owner>/claude-code-monitor.git
+git clone https://github.com/AnnCYW-cm/claude-code-monitor.git
 cd claude-code-monitor
 npm install
 npm run tauri:build
@@ -35,6 +35,8 @@ npm run tauri:build
 ```
 
 第一次 `cargo build` 会下载 ~500MB Rust crates（10-15 分钟），后续 build 几秒。
+
+> ⚠️ 如果你装了 Homebrew rust，可能会跟 rustup 冲突（dogfood 实测踩过坑——Homebrew rust 1.83 不支持 edition2024，编不过）。推荐：`brew uninstall rust` 后用 rustup 装 stable：`curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh`
 
 ---
 

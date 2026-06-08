@@ -40,8 +40,8 @@
 
 | Metric | Target | 怎么测 | 当前 |
 |---|---|---|---|
-| GitHub stars | ≥ 10 | `gh api repos/<owner>/claude-code-monitor` → `stargazers_count` | — |
-| Issues from non-author | ≥ 3 | `gh issue list --author '!<owner>'` | — |
+| GitHub stars | ≥ 10 | `gh api repos/AnnCYW-cm/claude-code-monitor` → `stargazers_count` | — |
+| Issues from non-author | ≥ 3 | `gh issue list --author '!AnnCYW-cm'` | — |
 | Closed alpha 用户 D14 retention | ≥ 50% (5/10) | 1-on-1 follow-up 聊 14 天后还用不用 | — |
 | 4/5 alpha 用户能复述"啊有用瞬间" | true | beta 访谈结构化 | — |
 | 推特发布的 like / repost | ≥ 50 / ≥ 5 | twitter analytics | — |
@@ -56,7 +56,7 @@
 | Metric | Target | 怎么测 | 当前 |
 |---|---|---|---|
 | GitHub stars | ≥ 100 | gh api | — |
-| External contributor PR merged | ≥ 1 | `gh pr list --author '!<owner>' --state merged` | — |
+| External contributor PR merged | ≥ 1 | `gh pr list --author '!AnnCYW-cm' --state merged` | — |
 | Active issues responded < 1 week | ≥ 80% | `gh issue list --created '>=YYYY-MM-DD'` 跟 first response time | — |
 | 非作者 fork count | ≥ 10 | gh api | — |
 | Homebrew cask submit | merged | brew tap formula PR 状态 | — |
@@ -124,9 +124,9 @@
 
 ```bash
 # 跑这套 cmd，把结果写到 docs/roadmap/metrics-YYYY-MM.md
-gh api repos/<owner>/claude-code-monitor | jq '{stars: .stargazers_count, forks: .forks_count}'
+gh api repos/AnnCYW-cm/claude-code-monitor | jq '{stars: .stargazers_count, forks: .forks_count}'
 gh issue list --state open --limit 100 | wc -l
-gh pr list --state merged --author '!<owner>' --limit 100 | wc -l
+gh pr list --state merged --author '!AnnCYW-cm' --limit 100 | wc -l
 # ...
 ```
 
