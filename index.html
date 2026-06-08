@@ -8,10 +8,11 @@
   </head>
   <body>
     <div id="app">
-      <header data-tauri-drag-region>
+      <div class="titlebar" data-tauri-drag-region>
+        <span class="tb-spacer-left" data-tauri-drag-region></span>
         <h1 data-tauri-drag-region>Claude Code Monitor</h1>
         <button id="refresh" type="button">refresh</button>
-      </header>
+      </div>
       <main>
         <ul id="sessions"></ul>
       </main>

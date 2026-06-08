@@ -75,61 +75,62 @@ body {
  * Header (ux-design § 4)
  * ============================================================ */
 
-header {
-  /* 3-column grid keeps title true-centered regardless of button width:
-     left spacer | title | refresh
-     With titleBarStyle="Overlay", native traffic lights float over our
-     header at top-left. padding-top is bumped so the H1 sits below the
-     ~28pt traffic-light strip and doesn't get visually clipped. */
+/* macOS-style title bar: sits inside the native chrome strip alongside the
+   traffic lights (titleBarStyle="Overlay"). 28pt matches the standard
+   macOS NSWindow title bar height. 3-col grid (1fr | auto | 1fr) puts
+   the title at the true window center, traffic lights overlay the left
+   spacer without overlapping the title at our window width (800px). */
+.titlebar {
   display: grid;
   grid-template-columns: 1fr auto 1fr;
   align-items: center;
-  padding: 32px 24px 18px;
-  border-bottom: 1px solid var(--separator-color);
+  height: 28px;
   background: var(--window-bg);
   flex-shrink: 0;
-  /* Native NSWindow drag works on traffic-light row; the rest of our
-     header (set via data-tauri-drag-region) makes the whole bar
-     draggable just like a normal macOS title bar. */
   cursor: default;
+  user-select: none;
 }
 
-header h1 {
+.titlebar .tb-spacer-left {
+  grid-column: 1;
+}
+
+.titlebar h1 {
   grid-column: 2;
-  font-size: 18px;
+  font-size: 13px;
   font-weight: 600;
   color: var(--label-color);
-  letter-spacing: -0.3px;
   text-align: center;
+  letter-spacing: -0.08px;
+  margin: 0;
 }
 
-header button#refresh {
+.titlebar button#refresh {
   grid-column: 3;
   justify-self: end;
-}
-
-button#refresh {
   background: transparent;
   border: none;
-  border-radius: 6px;
-  padding: 6px 14px;
-  font-size: 15px;
+  border-radius: 4px;
+  padding: 2px 8px;
+  margin-right: 8px;
+  font-size: 12px;
   font-family: inherit;
   cursor: pointer;
-  color: var(--label-color);
-  transition: background-color 100ms linear;
+  color: var(--secondary-label-color);
+  transition: background-color 100ms linear, color 100ms linear;
 }
 
-button#refresh:hover {
+.titlebar button#refresh:hover {
   background: var(--control-bg);
+  color: var(--label-color);
 }
 
-button#refresh:active {
+.titlebar button#refresh:active {
   background: var(--control-bg);
   opacity: 0.7;
 }
 
-button#refresh[disabled] {
+.titlebar button#refresh[disabled] {
   opacity: 0.5;
   cursor: default;
 }
