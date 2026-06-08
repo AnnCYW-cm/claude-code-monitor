@@ -3,7 +3,7 @@ pub mod session;
 use tauri::{
     menu::{Menu, MenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
-    AppHandle, Manager,
+    AppHandle, Manager, WindowEvent,
 };
 
 /// Push the waiting count onto the tray title.
@@ -40,6 +40,17 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .invoke_handler(tauri::generate_handler![list_sessions])
+        .on_window_event(|window, event| {
+            // Intercept the red traffic-light click. We're a tray-resident app:
+            // closing the window must NOT exit the process. The only exit
+            // path is the tray Quit menu (S-006). Without this, clicking the
+            // red button would close the window AND, since it's our only
+            // window, terminate the app — surprising and undesirable.
+            if let WindowEvent::CloseRequested { api, .. } = event {
+                api.prevent_close();
+                let _ = window.hide();
+            }
+        })
         .setup(|app| {
             #[cfg(target_os = "macos")]
             app.set_activation_policy(tauri::ActivationPolicy::Accessory);
